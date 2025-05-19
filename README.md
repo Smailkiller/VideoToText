@@ -29,9 +29,8 @@
 
 ## ⚙️ Установка
 
-1. Установите зависимости:
 
-0. Клонируйте репозиторий:
+1. Клонируйте репозиторий:
 
 ```bash
 git clone https://github.com/Smailkiller/VideoToText.git
