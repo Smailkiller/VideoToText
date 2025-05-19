@@ -34,7 +34,7 @@
 0. Клонируйте репозиторий:
 
 ```bash
-git clone https://github.com/yourusername/video-transcriber.git
+git clone https://github.com/Smailkiller/VideoToText.git
 cd video-transcriber
 pip install vosk pydub
 ```
