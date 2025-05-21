@@ -32,7 +32,8 @@
 0 Готовая сборка доступна по ссылке:
  
 
-🔗 [Скачать VidToTXT.exe с Яндекс.Диска](https://disk.yandex.ru/d/AXk4EWM9273KsQ) или GIT [![Release](https://img.shields.io/badge/релиз-v1.0.0-blue?style=flat-square)](https://disk.yandex.ru/d/AXk4EWM9273KsQ)
+🔗 [Скачать VidToTXT.exe с Яндекс.Диска](https://disk.yandex.ru/d/AXk4EWM9273KsQ) или GIT [![GitHub release](https://img.shields.io/github/v/release/Smailkiller/VideoToText?style=flat-square&label=релиз)](https://github.com/Smailkiller/VideoToText/releases/latest)
+
 
 
 Или
