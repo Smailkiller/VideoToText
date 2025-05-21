@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, scrolledtext
+from tkinter import filedialog, scrolledtext, PhotoImage
 import threading
 import sys
 import os
@@ -8,8 +8,12 @@ import json
 from vosk import Model, KaldiRecognizer
 from pydub import AudioSegment
 
-# ===== ЛОГИКА ОБРАБОТКИ =====
 stop_flag = False
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.abspath(relative_path)
 
 def extract_audio(video_path, wav_path):
     audio = AudioSegment.from_file(video_path)
@@ -110,7 +114,6 @@ def process_videos(base_folder, model_path, log):
             continue
     log("\n✅ Обработка завершена.")
 
-# ===== ГРАФИЧЕСКИЙ ИНТЕРФЕЙС =====
 def start_process(video_path, model_path, log, stop_button):
     stop_button.config(state='normal')
     threading.Thread(target=process_videos, args=(video_path, model_path, log), daemon=True).start()
@@ -123,8 +126,13 @@ def gui_app():
     root = tk.Tk()
     root.title("🎙️ Video Transcriber GUI")
     root.geometry("740x640")
-    root.iconbitmap("favicon.ico")
     root.configure(bg="#ecf0f3")
+
+    # ✅ установка иконки из .png
+    icon_path = resource_path("favicon.png")
+    if os.path.exists(icon_path):
+        icon_img = PhotoImage(file=icon_path)
+        root.iconphoto(False, icon_img)
 
     def choose_video_folder():
         path = filedialog.askdirectory()
@@ -153,23 +161,20 @@ def gui_app():
     btn_style = {"bg": "#2c3e50", "fg": "#ffffff", "activebackground": "#34495e", "activeforeground": "#ecf0f1",
                  "relief": "flat", "bd": 0, "font": ("Segoe UI", 10, "bold"), "cursor": "hand2", "padx": 10, "pady": 6}
 
-    # Путь к видео
-    tk.Label(root, text="Папка с видео:", bg=bg_main, font=("Segoe UI", 10, "bold"), anchor='w').pack(anchor='w', padx=15, pady=(15, 0))
+    tk.Label(root, text="Папка с видео:", bg=bg_main, font=("Segoe UI", 10, "bold")).pack(anchor='w', padx=15, pady=(15, 0))
     frame_video = tk.Frame(root, bg=bg_main)
     frame_video.pack(fill='x', padx=15)
     entry_video = tk.Entry(frame_video, **entry_style)
     entry_video.pack(side='left', fill='x', expand=True, ipady=6, pady=5)
     tk.Button(frame_video, text="Обзор", command=choose_video_folder, **btn_style).pack(side='left', padx=5)
 
-    # Путь к модели
-    tk.Label(root, text="Папка с моделью Vosk:", bg=bg_main, font=("Segoe UI", 10, "bold"), anchor='w').pack(anchor='w', padx=15, pady=(10, 0))
+    tk.Label(root, text="Папка с моделью Vosk:", bg=bg_main, font=("Segoe UI", 10, "bold")).pack(anchor='w', padx=15, pady=(10, 0))
     frame_model = tk.Frame(root, bg=bg_main)
     frame_model.pack(fill='x', padx=15)
     entry_model = tk.Entry(frame_model, **entry_style)
     entry_model.pack(side='left', fill='x', expand=True, ipady=6, pady=5)
     tk.Button(frame_model, text="Обзор", command=choose_model_folder, **btn_style).pack(side='left', padx=5)
 
-    # Кнопки управления
     frame_buttons = tk.Frame(root, bg=bg_main)
     frame_buttons.pack(pady=15)
     tk.Button(frame_buttons, text="▶️ Обработка", command=lambda: start_process(entry_video.get(), entry_model.get(), log_output, btn_stop), **btn_style).pack(side='left', padx=5)
@@ -177,11 +182,9 @@ def gui_app():
     btn_stop.pack(side='left', padx=5)
     tk.Button(frame_buttons, text="🧹 Очистить", command=clear_output, **btn_style).pack(side='left', padx=5)
 
-    # Поле вывода логов
     text_output = scrolledtext.ScrolledText(root, height=18, bg="#ffffff", relief="flat", font=("Consolas", 10), wrap="word")
     text_output.pack(fill='both', expand=True, padx=15, pady=(0, 10))
 
-    # Футер
     footer = tk.Label(root, text="Разработано TG @Smailkiller", fg="#7f8c8d", bg=bg_main, font=("Segoe UI", 9, "italic"))
     footer.pack(pady=(0, 12))
 
