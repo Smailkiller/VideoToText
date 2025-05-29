@@ -36,15 +36,16 @@
 ## ⚙️ Установка
 
 Готовая сборка (EXE):
-Скачать VidToTXT.exe с Яндекс.Диска: https://disk.yandex.ru/d/AXk4EWM9273KsQ
-или
-GitHub Release: https://github.com/Smailkiller/VideoToText/releases/latest
+GitHub Release
+[![GitHub release](https://img.shields.io/github/v/release/Smailkiller/VideoToText?style=for-the-badge&label=Скачать%20релиз)](https://github.com/Smailkiller/VideoToText/releases/latest)
+
 
 Или собрать вручную:
-1. git clone https://github.com/Smailkiller/VideoToText.git
-2. cd VideoToText
-3. pip install -r requirements.txt
-
+<pre>
+bash git clone https://github.com/Smailkiller/VideoToText.git 
+cd VideoToText 
+pip install -r requirements.txt
+</pre>
 Обязательно установить FFmpeg (https://ffmpeg.org/download.html) и добавить его в PATH!
 
 --------------------------------------------------------
