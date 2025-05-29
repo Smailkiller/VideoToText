@@ -1,0 +1,7 @@
+vosk>=0.3.45
+openai-whisper>=20231117
+torch>=2.0.0
+pydub>=0.25.1
+tqdm>=4.65.0
+soundfile>=0.12.1
+numpy>=1.23.0
