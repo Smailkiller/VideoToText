@@ -35,8 +35,8 @@
 
 ## ⚙️ Установка
 
-Готовая сборка (EXE):
-GitHub Release
+Готовая сборка (EXE):GitHub Release
+
 [![GitHub release](https://img.shields.io/github/v/release/Smailkiller/VideoToText?style=for-the-badge&label=Скачать%20релиз)](https://github.com/Smailkiller/VideoToText/releases/latest)
 
 
