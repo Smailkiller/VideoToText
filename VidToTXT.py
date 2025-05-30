@@ -10,9 +10,27 @@ from pydub import AudioSegment
 import wave
 import json
 from vosk import Model, KaldiRecognizer
+import shutil
 
 if getattr(sys, 'frozen', False):
-    os.environ['PATH'] = sys._MEIPASS + os.pathsep + os.environ['PATH']
+    base_path = sys._MEIPASS
+
+    # Обновляем PATH
+    os.environ['PATH'] = os.pathsep.join([
+        os.path.join(base_path, 'vosk'),
+        os.environ['PATH']
+    ])
+
+    # Для корректной работы Vosk DLL
+    try:
+        os.add_dll_directory(os.path.join(base_path, 'vosk'))
+    except (AttributeError, FileNotFoundError):
+        pass
+
+
+# Ensure mel_filters.npz is available
+whisper_asset_path = os.path.join(base_path, "whisper", "assets", "mel_filters.npz")
+os.environ["WHISPER_ASSETS"] = os.path.dirname(whisper_asset_path)
 
 MODELS_INFO = {
     'tiny':   {'size': '75MB',  'speed': 5, 'quality': 1},
