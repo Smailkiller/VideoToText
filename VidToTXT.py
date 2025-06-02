@@ -6,11 +6,26 @@ import sys
 import datetime
 import webbrowser
 import whisper
-from pydub import AudioSegment
 import wave
 import json
 from vosk import Model, KaldiRecognizer
 import shutil
+from pydub.utils import which
+from pydub import AudioSegment
+
+
+# Автопуть для ffmpeg/ffprobe если приложение собрано
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+    ffmpeg_path = os.path.join(base_path, "ffmpeg", "ffmpeg.exe")
+    ffprobe_path = os.path.join(base_path, "ffmpeg", "ffprobe.exe")
+else:
+    # Для отладки из IDE
+    ffmpeg_path = os.path.join(os.getcwd(), "ffmpeg", "ffmpeg.exe")
+    ffprobe_path = os.path.join(os.getcwd(), "ffmpeg", "ffprobe.exe")
+
+AudioSegment.converter = ffmpeg_path
+AudioSegment.ffprobe = ffprobe_path
 
 if getattr(sys, 'frozen', False):
     base_path = sys._MEIPASS
@@ -29,8 +44,13 @@ if getattr(sys, 'frozen', False):
 
 
 # Ensure mel_filters.npz is available
-whisper_asset_path = os.path.join(base_path, "whisper", "assets", "mel_filters.npz")
+if getattr(sys, 'frozen', False):
+    whisper_asset_path = os.path.join(sys._MEIPASS, "whisper", "assets", "mel_filters.npz")
+else:
+    whisper_asset_path = os.path.join(os.getcwd(), "whisper", "assets", "mel_filters.npz")
+
 os.environ["WHISPER_ASSETS"] = os.path.dirname(whisper_asset_path)
+
 
 MODELS_INFO = {
     'tiny':   {'size': '75MB',  'speed': 5, 'quality': 1},
@@ -61,7 +81,7 @@ def transcribe_audio_whisper(wav_path, model):
         output_lines.append(line)
     return "\n".join(output_lines)
 
-def process_videos_whisper(base_folder, model_key, log):
+def process_videos_whisper(base_folder, model_key, log, skip_existing):
     global whisper_stop_flag
     whisper_stop_flag = False
 
@@ -93,7 +113,9 @@ def process_videos_whisper(base_folder, model_key, log):
         base_name = os.path.splitext(video_path)[0]
         wav_path = base_name + ".wav"
         txt_path = base_name + ".txt"
-
+        if skip_existing and os.path.exists(txt_path):
+            log(f"    ⏭️ Пропущен (уже есть .txt): {txt_path}")
+            continue
         try:
             log("    🎧 Вытаскивание аудио...")
             extract_audio(video_path, wav_path)
@@ -115,9 +137,10 @@ def process_videos_whisper(base_folder, model_key, log):
 
     log("\n✅ Все видео обработаны.")
 
-def start_process_whisper(video_path, model_key, log, stop_button):
+def start_process_whisper(video_path, model_key, log, stop_button, skip_existing):
     stop_button.config(state='normal')
-    threading.Thread(target=process_videos_whisper, args=(video_path, model_key, log), daemon=True).start()
+    threading.Thread(target=process_videos_whisper, args=(video_path, model_key, log, skip_existing), daemon=True).start()
+
 
 def stop_process_whisper():
     global whisper_stop_flag
@@ -300,9 +323,19 @@ def gui_app():
     dropdown.config(font=("Segoe UI", 10), bg="white", width=36)
     dropdown.pack(fill='x', padx=15, pady=(0, 10))
 
+    skip_existing_var = tk.BooleanVar(value=True)
+    skip_checkbox = tk.Checkbutton(whisper_tab, text="Пропускать уже обработанные", variable=skip_existing_var, bg=bg_main, font=("Segoe UI", 9))
+    skip_checkbox.pack(anchor='w', padx=20, pady=(0, 10))
+
     frame_buttons_w = tk.Frame(whisper_tab, bg=bg_main)
     frame_buttons_w.pack(pady=15)
-    btn_start_w = tk.Button(frame_buttons_w, text="▶️ Обработка", command=lambda: start_process_whisper(entry_video_w.get(), model_var.get(), log_output_w, btn_stop_w), **btn_style)
+    tk.Button(frame_buttons_w, text="🗑️ Удалить .wav", command=lambda: delete_wavs(entry_video_w.get(), log_output_w),
+              **btn_style).pack(side='left', padx=5)
+    tk.Button(frame_buttons_w, text="📄 Собрать TXT", command=lambda: merge_txt(entry_video_w.get(), log_output_w),
+              **btn_style).pack(side='left', padx=5)
+
+    btn_start_w = tk.Button(frame_buttons_w, text="▶️ Обработка", command=lambda: start_process_whisper(entry_video_w.get(), model_var.get(), log_output_w, btn_stop_w, skip_existing_var.get())
+, **btn_style)
     btn_start_w.pack(side='left', padx=5)
     btn_stop_w = tk.Button(frame_buttons_w, text="⛔ Остановить", command=stop_process_whisper, state='normal', **btn_style)
     btn_stop_w.pack(side='left', padx=5)
@@ -329,9 +362,22 @@ def gui_app():
     entry_model_v.pack(side='left', fill='x', expand=True, ipady=6, pady=5)
     tk.Button(frame_model_v, text="Обзор", command=lambda: entry_model_v.delete(0, tk.END) or entry_model_v.insert(0, filedialog.askdirectory()), **btn_style).pack(side='left', padx=5)
 
+    skip_existing_var_v = tk.BooleanVar(value=True)
+    skip_checkbox_v = tk.Checkbutton(vosk_tab, text="Пропускать уже обработанные", variable=skip_existing_var_v,
+                                     bg=bg_main, font=("Segoe UI", 9))
+    skip_checkbox_v.pack(anchor='w', padx=20, pady=(0, 10))
+
     frame_buttons_v = tk.Frame(vosk_tab, bg=bg_main)
     frame_buttons_v.pack(pady=15)
-    btn_start_v = tk.Button(frame_buttons_v, text="▶️ Обработка", command=lambda: start_process_vosk(entry_video_v.get(), entry_model_v.get(), log_output_v, btn_stop_v), **btn_style)
+
+
+    tk.Button(frame_buttons_v, text="🗑️ Удалить .wav", command=lambda: delete_wavs(entry_video_v.get(), log_output_v),
+              **btn_style).pack(side='left', padx=5)
+    tk.Button(frame_buttons_v, text="📄 Собрать TXT", command=lambda: merge_txt(entry_video_v.get(), log_output_v),
+              **btn_style).pack(side='left', padx=5)
+
+    btn_start_v = tk.Button(frame_buttons_v, text="▶️ Обработка", command=lambda: start_process_vosk(entry_video_v.get(), entry_model_v.get(), log_output_v, btn_stop_v, skip_existing_var_v.get())
+, **btn_style)
     btn_start_v.pack(side='left', padx=5)
     btn_stop_v = tk.Button(frame_buttons_v, text="⛔ Остановить", command=stop_process_vosk, state='normal', **btn_style)
     btn_stop_v.pack(side='left', padx=5)
@@ -342,6 +388,36 @@ def gui_app():
 
     sys.stdout = StdoutRedirector(text_output_w)
     sys.stderr = StdoutRedirector(text_output_w)
+
+    def merge_txt(base_folder, log):
+        summary_path = os.path.join(base_folder, "summary.txt")
+        with open(summary_path, "w", encoding="utf-8") as summary_file:
+            for root, _, files in os.walk(base_folder):
+                for f in sorted(files):
+                    if f.endswith(".txt"):
+                        base = os.path.splitext(f)[0]
+                        full_video = [base + ext for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]]
+                        if any(os.path.exists(os.path.join(root, v)) for v in full_video):
+                            txt_path = os.path.join(root, f)
+                            with open(txt_path, "r", encoding="utf-8") as tf:
+                                summary_file.write(f"\n\n--- {f} ---\n")
+                                summary_file.write(tf.read())
+        log(f"\n📄 Файл summary.txt сохранён в: {summary_path}")
+
+    def delete_wavs(base_folder, log):
+        deleted = 0
+        for root, _, files in os.walk(base_folder):
+            for f in files:
+                if f.lower().endswith(".wav"):
+                    wav_path = os.path.join(root, f)
+                    video_path = os.path.splitext(wav_path)[0]
+                    if any(os.path.exists(video_path + ext) for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]):
+                        try:
+                            os.remove(wav_path)
+                            deleted += 1
+                        except Exception as e:
+                            log(f"⚠️ Не удалось удалить {wav_path}: {e}")
+        log(f"\n🗑️ Удалено {deleted} .wav файлов")
 
     def log_output_w(msg, overwrite=False):
         if len(msg) < 400:
