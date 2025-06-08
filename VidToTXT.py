@@ -59,6 +59,24 @@ MODELS_INFO = {
     'medium': {'size': '1.5GB', 'speed': 3, 'quality': 4},
     'large':  {'size': '2.9GB', 'speed': 1, 'quality': 5},
 }
+WHISPER_LANGUAGES = {
+    "🌐 Auto-detect": None,
+    "🇬🇧 English": "en",
+    "🇷🇺 Russian": "ru",
+    "🇫🇷 French": "fr",
+    "🇩🇪 German": "de",
+    "🇪🇸 Spanish": "es",
+    "🇮🇹 Italian": "it",
+    "🇨🇳 Chinese": "zh",
+    "🇯🇵 Japanese": "ja",
+    "🇰🇷 Korean": "ko",
+    "🇺🇦 Ukrainian": "uk",
+    "🇵🇱 Polish": "pl",
+    "🇧🇷 Portuguese": "pt",
+    "🇹🇷 Turkish": "tr"
+    # Добавляй по мере необходимости
+}
+
 def model_label(name):
     info = MODELS_INFO[name]
     return f"{name.capitalize()} — {info['size']} | Speed {info['speed']}/5 | Quality {info['quality']}/5"
@@ -72,16 +90,25 @@ def extract_audio(video_path, wav_path):
     audio = audio.set_frame_rate(16000)
     audio.export(wav_path, format="wav", parameters=["-acodec", "pcm_s16le"])
 
-def transcribe_audio_whisper(wav_path, model):
-    result = model.transcribe(wav_path, verbose=False, word_timestamps=True)
-    output_lines = []
-    for segment in result["segments"]:
-        start_time = str(datetime.timedelta(seconds=int(segment["start"])))
-        line = f"[{start_time}] {segment['text'].strip()}"
-        output_lines.append(line)
-    return "\n".join(output_lines)
+def transcribe_audio_whisper(wav_path, model, language=None):
+    try:
+        transcribe_args = {'verbose': False, "word_timestamps": True}
+        if language:
+            transcribe_args["language"] = language
+        result = model.transcribe(wav_path, **transcribe_args)
+        output_lines = []
+        for segment in result.get("segments", []):
+            start_time = str(datetime.timedelta(seconds=int(segment["start"])))
+            line = f"[{start_time}] {segment['text'].strip()}"
+            output_lines.append(line)
+        return "\n".join(output_lines)
+    except Exception as e:
+        print(f"⚠️ Ошибка в Whisper: {e}")
+        return None
 
-def process_videos_whisper(base_folder, model_key, log, skip_existing):
+
+
+def process_videos_whisper(base_folder, model_key, log, skip_existing, lang_code):
     global whisper_stop_flag
     whisper_stop_flag = False
 
@@ -113,9 +140,11 @@ def process_videos_whisper(base_folder, model_key, log, skip_existing):
         base_name = os.path.splitext(video_path)[0]
         wav_path = base_name + ".wav"
         txt_path = base_name + ".txt"
+
         if skip_existing and os.path.exists(txt_path):
             log(f"    ⏭️ Пропущен (уже есть .txt): {txt_path}")
             continue
+
         try:
             log("    🎧 Вытаскивание аудио...")
             extract_audio(video_path, wav_path)
@@ -126,7 +155,10 @@ def process_videos_whisper(base_folder, model_key, log, skip_existing):
 
         try:
             log("    🖋️ Транскрибация аудио...")
-            text = transcribe_audio_whisper(wav_path, model)
+            text = transcribe_audio_whisper(wav_path, model, lang_code)
+            if text is None:
+                log(f"    ⚠️ Не удалось получить текст для {wav_path}")
+                continue
             with open(txt_path, "w", encoding="utf-8") as f:
                 f.write(f"# {os.path.basename(video_path)}\n\n")
                 f.write(text)
@@ -137,9 +169,12 @@ def process_videos_whisper(base_folder, model_key, log, skip_existing):
 
     log("\n✅ Все видео обработаны.")
 
-def start_process_whisper(video_path, model_key, log, stop_button, skip_existing):
+
+def start_process_whisper(video_path, model_key, log, stop_button, skip_existing, language_ui):
     stop_button.config(state='normal')
-    threading.Thread(target=process_videos_whisper, args=(video_path, model_key, log, skip_existing), daemon=True).start()
+    lang_code = WHISPER_LANGUAGES.get(language_ui)
+    threading.Thread(target=process_videos_whisper, args=(video_path, model_key, log, skip_existing, lang_code), daemon=True).start()
+
 
 
 def stop_process_whisper():
@@ -165,7 +200,7 @@ def transcribe_audio_vosk(wav_path, model, log):
         read += 4000
         percent = min(100, int(read / total * 100))
         if percent != last_percent:
-            log(f"\r    🟩 Прогресс транскрипции: {percent}%", overwrite=True)
+            log(f"    🟩 Прогресс транскрипции: {percent}%", overwrite=True)
             last_percent = percent
     log("\n    ✅ Распознавание завершено.")
     return json.loads(rec.FinalResult())
@@ -251,14 +286,29 @@ class StdoutRedirector:
     def __init__(self, text_widget):
         self.text_widget = text_widget
         self._stdout = sys.stdout
+        self.last_line_tag = "progress_line"
+
     def write(self, text):
         self._stdout.write(text)
+
         self.text_widget.configure(state='normal')
-        self.text_widget.insert('end', text)
-        self.text_widget.see('end')
+
+        if "\r" in text:
+            # Удалить старую строку прогресса
+            self.text_widget.mark_set("progress_start", "end-1l linestart")
+            self.text_widget.mark_set("progress_end", "end-1l lineend")
+            self.text_widget.delete("progress_start", "progress_end")
+            # Вставить новую строку
+            self.text_widget.insert("end", text.replace("\r", ""))
+        else:
+            self.text_widget.insert("end", text)
+
+        self.text_widget.see("end")
         self.text_widget.configure(state='disabled')
+
     def flush(self):
         self._stdout.flush()
+
 
 def open_vosk_link(event=None):
     webbrowser.open_new("https://alphacephei.com/vosk/models")
@@ -326,6 +376,15 @@ def gui_app():
     skip_existing_var = tk.BooleanVar(value=True)
     skip_checkbox = tk.Checkbutton(whisper_tab, text="Пропускать уже обработанные", variable=skip_existing_var, bg=bg_main, font=("Segoe UI", 9))
     skip_checkbox.pack(anchor='w', padx=20, pady=(0, 10))
+    tk.Label(whisper_tab, text="Язык (не обязательно):", bg=bg_main, font=("Segoe UI", 10, "bold")).pack(anchor='w',
+                                                                                                         padx=15,
+                                                                                                         pady=(0, 0))
+    language_var = tk.StringVar()
+    language_dropdown = ttk.Combobox(whisper_tab, textvariable=language_var, font=("Segoe UI", 10))
+    language_dropdown['values'] = list(WHISPER_LANGUAGES.keys())
+
+    language_dropdown.pack(fill='x', padx=15, pady=(0, 10))
+    language_dropdown.set("🌐 Auto-detect")  # по умолчанию пусто
 
     frame_buttons_w = tk.Frame(whisper_tab, bg=bg_main)
     frame_buttons_w.pack(pady=15)
@@ -334,8 +393,7 @@ def gui_app():
     tk.Button(frame_buttons_w, text="📄 Собрать TXT", command=lambda: merge_txt(entry_video_w.get(), log_output_w),
               **btn_style).pack(side='left', padx=5)
 
-    btn_start_w = tk.Button(frame_buttons_w, text="▶️ Обработка", command=lambda: start_process_whisper(entry_video_w.get(), model_var.get(), log_output_w, btn_stop_w, skip_existing_var.get())
-, **btn_style)
+    btn_start_w = tk.Button(frame_buttons_w, text="▶️ Обработка", command=lambda: start_process_whisper(entry_video_w.get(), model_var.get(), log_output_w, btn_stop_w, skip_existing_var.get(), language_var.get()), **btn_style)
     btn_start_w.pack(side='left', padx=5)
     btn_stop_w = tk.Button(frame_buttons_w, text="⛔ Остановить", command=stop_process_whisper, state='normal', **btn_style)
     btn_stop_w.pack(side='left', padx=5)
@@ -420,13 +478,23 @@ def gui_app():
         log(f"\n🗑️ Удалено {deleted} .wav файлов")
 
     def log_output_w(msg, overwrite=False):
-        if len(msg) < 400:
-            text_output_w.configure(state='normal')
-            if overwrite:
-                text_output_w.delete("end-2l", "end-1l")
-            text_output_w.insert(tk.END, msg + "\n")
-            text_output_w.see(tk.END)
-            text_output_w.configure(state='disabled')
+        if len(msg) > 400:
+            return
+
+        text_output_w.configure(state='normal')
+
+        # Если строка похожа на прогресс (содержит % и / и frames/s)
+        is_progress = "%" in msg and "/" in msg and "frames/s" in msg
+
+        if is_progress:
+            # Удаляем последнюю строку
+            text_output_w.delete("end-2l", "end-1l")
+            text_output_w.insert("end", msg + "\n")
+        else:
+            text_output_w.insert("end", msg + "\n")
+
+        text_output_w.see("end")
+        text_output_w.configure(state='disabled')
 
     def log_output_v(msg, overwrite=False):
         if len(msg) < 400:
